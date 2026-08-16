@@ -1,0 +1,995 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>SD VANSALE</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <!-- HTML5 Sortable JS for Drag and Drop -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
+  <!-- html2pdf Library for Generating PDF Reports -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+  <style>
+    /* Prevent mobile pinch zoom, bounce, and elastic scrolling like a native app */
+    html, body {
+      touch-action: manipulation;
+      overscroll-behavior: none;
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-touch-callout: none;
+      height: 100%;
+      width: 100%;
+      overflow: hidden;
+      position: fixed;
+    }
+    
+    /* Allow typing & text selection inside inputs and textareas */
+    input, textarea, select {
+      user-select: text !important;
+      -webkit-user-select: text !important;
+    }
+
+    .tab-content { display: none; height: 100%; }
+    .tab-content.active { display: flex; flex-direction: column; }
+    .ghost-class { opacity: 0.4; background-color: #f3f4f6; }
+
+    /* Custom smooth scrolling inside content containers */
+    .scrollable-content {
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      overscroll-behavior-y: contain;
+    }
+  </style>
+</head>
+<body class="bg-gray-100 font-sans text-gray-800 flex flex-col h-screen w-screen">
+
+  <!-- Toast Notification System -->
+  <div id="toast" class="fixed top-4 left-1/2 -translate-x-1/2 z-[100] bg-gray-900 text-white text-xs font-semibold px-4 py-2.5 rounded-xl shadow-lg transition-all duration-300 opacity-0 pointer-events-none flex items-center gap-2">
+    <i data-lucide="check-circle" class="w-4 h-4 text-emerald-400"></i>
+    <span id="toastMsg">Action completed</span>
+  </div>
+
+  <!-- Top Navigation Header -->
+  <header class="bg-indigo-700 text-white shadow-md flex-none z-30 pt-safe">
+    <div class="max-w-5xl mx-auto px-4 py-3 flex justify-between items-center">
+      <div class="flex items-center space-x-2">
+        <i data-lucide="truck" class="w-6 h-6"></i>
+        <h1 class="text-xl font-black tracking-wider">SD VANSALE</h1>
+      </div>
+      <div class="text-xs bg-indigo-800 px-3 py-1.5 rounded-full flex items-center gap-1 font-medium">
+        <i data-lucide="calendar" class="w-3.5 h-3.5"></i>
+        <span id="headerDate"></span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main View Container -->
+  <main class="flex-1 max-w-5xl w-full mx-auto p-4 overflow-hidden relative">
+
+    <!-- TAB 1: NEW ORDERS & ROUTE -->
+    <section id="tab-orders" class="tab-content active space-y-4">
+      <div class="flex justify-between items-center bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex-none">
+        <div>
+          <h2 class="text-base font-bold text-gray-800">Route & Orders List</h2>
+          <p class="text-[11px] text-gray-500">Drag and drop orders to prioritize your route</p>
+        </div>
+        <button onclick="switchTab('tab-add-order')" class="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-2 rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow active:scale-95 transition-transform">
+          <i data-lucide="plus-circle" class="w-4 h-4"></i> New Order
+        </button>
+      </div>
+
+      <!-- Quick Filter -->
+      <div class="flex gap-2 overflow-x-auto pb-1 flex-none no-scrollbar">
+        <button onclick="filterOrders('all')" class="filter-btn active bg-indigo-100 text-indigo-700 px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap">All Orders</button>
+        <button onclick="filterOrders('pending')" class="filter-btn bg-gray-200 text-gray-700 px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap">Pending Route</button>
+        <button onclick="filterOrders('paid')" class="filter-btn bg-gray-200 text-gray-700 px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap">Paid</button>
+        <button onclick="filterOrders('unpaid')" class="filter-btn bg-gray-200 text-gray-700 px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap">Unpaid</button>
+        <button onclick="filterOrders('partial')" class="filter-btn bg-gray-200 text-gray-700 px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap">Partial</button>
+      </div>
+
+      <!-- Drag & Drop Order List -->
+      <div id="ordersList" class="scrollable-content flex-1 space-y-3 pb-20">
+        <!-- Rendered dynamically -->
+      </div>
+    </section>
+
+    <!-- TAB 2: TAKE NEW ORDER -->
+    <section id="tab-add-order" class="tab-content">
+      <div class="bg-white p-5 rounded-xl shadow-sm border border-gray-100 scrollable-content flex-1 pb-20">
+        <h2 class="text-base font-bold text-gray-800 mb-4 flex items-center gap-2">
+          <i data-lucide="shopping-bag" class="text-indigo-600"></i> Create New Order
+        </h2>
+
+        <form id="orderForm" onsubmit="saveOrder(event)" class="space-y-4">
+          <div>
+            <label class="block text-xs font-bold text-gray-700 mb-1">Select Shop *</label>
+            <select id="orderShopSelect" class="w-full border border-gray-300 rounded-lg p-2.5 text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-none" required>
+              <option value="">-- Choose a Shop --</option>
+            </select>
+          </div>
+
+          <div>
+            <label class="block text-xs font-bold text-gray-700 mb-1">Delivery Date *</label>
+            <input type="date" id="orderDeliveryDate" class="w-full border border-gray-300 rounded-lg p-2.5 text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-none" required />
+          </div>
+
+          <!-- Items List -->
+          <div class="border-t border-b border-gray-200 py-3 my-2">
+            <div class="flex justify-between items-center mb-2">
+              <span class="text-xs font-bold text-gray-700">Order Items</span>
+              <button type="button" onclick="addOrderItemRow()" class="text-xs text-indigo-600 hover:text-indigo-800 font-bold flex items-center gap-1">
+                <i data-lucide="plus" class="w-3.5 h-3.5"></i> Add Item
+              </button>
+            </div>
+            
+            <div id="orderItemsContainer" class="space-y-2">
+              <!-- Item Rows -->
+            </div>
+
+            <div class="flex justify-end items-center mt-3 pt-2 border-t text-xs font-bold text-gray-800">
+              <span>Total Amount:&nbsp;</span>
+              <span id="orderGrandTotal">0.000</span>
+              <span class="ml-1 text-xs">BHD</span>
+            </div>
+          </div>
+
+          <div class="flex gap-2 pt-2">
+            <button type="submit" class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-2.5 rounded-lg text-xs font-semibold shadow active:scale-95 transition-transform">
+              Submit Order
+            </button>
+            <button type="button" onclick="switchTab('tab-orders')" class="bg-gray-200 text-gray-700 px-4 py-2.5 rounded-lg text-xs font-semibold">
+              Cancel
+            </button>
+          </div>
+        </form>
+      </div>
+    </section>
+
+    <!-- TAB 3: SHOPS MANAGEMENT -->
+    <section id="tab-shops" class="tab-content space-y-4">
+      <div class="flex justify-between items-center bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex-none">
+        <div>
+          <h2 class="text-base font-bold text-gray-800">Shops Directory</h2>
+          <p class="text-[11px] text-gray-500"><span id="shopCount">0</span> shops registered</p>
+        </div>
+        <button onclick="openAddShopModal()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-3.5 py-2 rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow active:scale-95 transition-transform">
+          <i data-lucide="plus-circle" class="w-4 h-4"></i> Add New Shop
+        </button>
+      </div>
+
+      <!-- Registered Shops List -->
+      <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-100 scrollable-content flex-1 pb-20">
+        <div id="shopsList" class="divide-y divide-gray-100">
+          <!-- Rendered dynamically -->
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 4: DAILY REPORT -->
+    <section id="tab-reports" class="tab-content space-y-4">
+      <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-100 scrollable-content flex-1 pb-20">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+          <h2 class="text-base font-bold text-gray-800 flex items-center gap-2">
+            <i data-lucide="bar-chart-3" class="text-indigo-600"></i> Daily Sales & Collection Report
+          </h2>
+          <div class="flex gap-2">
+            <input type="date" id="reportDate" onchange="renderReport()" class="border border-gray-300 rounded-lg p-2 text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-none" />
+            <button onclick="downloadReportPDF()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow active:scale-95 transition-transform">
+              <i data-lucide="download" class="w-4 h-4"></i> PDF Report
+            </button>
+          </div>
+        </div>
+
+        <!-- PDF Printable Target Area -->
+        <div id="pdfReportContent" class="p-2 bg-white">
+          <div class="mb-4 pb-2 border-b border-gray-200">
+            <h1 class="text-lg font-black text-indigo-800">SD VANSALE</h1>
+            <p class="text-[11px] text-gray-500">Daily Summary - Date: <span id="pdfSelectedDate" class="font-bold"></span></p>
+          </div>
+
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mb-5">
+            <div class="bg-indigo-50 p-2.5 rounded-lg text-center">
+              <span class="block text-[10px] text-indigo-600 font-medium">Total Orders</span>
+              <span id="reportTotalOrders" class="text-lg font-bold text-indigo-900">0</span>
+            </div>
+            <div class="bg-blue-50 p-2.5 rounded-lg text-center">
+              <span class="block text-[10px] text-blue-600 font-medium">Total Sales</span>
+              <span id="reportTotalSales" class="text-sm sm:text-base font-bold text-blue-900">0.000 BHD</span>
+            </div>
+            <div class="bg-emerald-50 p-2.5 rounded-lg text-center">
+              <span class="block text-[10px] text-emerald-600 font-medium">Collected Cash</span>
+              <span id="reportCash" class="text-sm sm:text-base font-bold text-emerald-900">0.000 BHD</span>
+            </div>
+            <div class="bg-purple-50 p-2.5 rounded-lg text-center">
+              <span class="block text-[10px] text-purple-600 font-medium">Collected Benefit</span>
+              <span id="reportBenefit" class="text-sm sm:text-base font-bold text-purple-900">0.000 BHD</span>
+            </div>
+          </div>
+
+          <div class="bg-amber-50 border-l-4 border-amber-400 p-2.5 rounded-r-lg mb-4 flex justify-between items-center">
+            <span class="text-xs font-semibold text-amber-800">Unpaid Balance Today:</span>
+            <span id="reportUnpaid" class="text-sm font-bold text-amber-900">0.000 BHD</span>
+          </div>
+
+          <h3 class="text-[11px] font-bold text-gray-700 mb-2 uppercase tracking-wider">Orders Breakdown</h3>
+          <div id="reportOrdersList" class="space-y-2">
+            <!-- Rendered dynamically -->
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- TAB 5: NOTEPAD -->
+    <section id="tab-notepad" class="tab-content space-y-4">
+      <div class="bg-white p-5 rounded-xl shadow-sm border border-gray-100 flex flex-col h-full pb-20">
+        <div class="flex justify-between items-center mb-3 flex-none">
+          <h2 class="text-base font-bold text-gray-800 flex items-center gap-2">
+            <i data-lucide="file-text" class="text-indigo-600"></i> Van Driver Note Pad
+          </h2>
+          <span id="notepadStatus" class="text-xs text-emerald-600 hidden font-medium">Auto-saved!</span>
+        </div>
+        <textarea id="driverNotes" oninput="saveNotes()" placeholder="Jot down quick client instructions, van stock notes, stock return list, or pending phone numbers here..." class="w-full flex-1 border border-gray-200 rounded-lg p-3 text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-yellow-50/50 leading-relaxed resize-none"></textarea>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Bottom Navigation Bar for Mobile -->
+  <nav class="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-30 pb-safe">
+    <div class="max-w-5xl mx-auto flex justify-around">
+      <button onclick="switchTab('tab-orders')" class="nav-btn active flex-1 py-2 flex flex-col items-center text-indigo-600">
+        <i data-lucide="truck" class="w-5 h-5"></i>
+        <span class="text-[10px] mt-1 font-semibold">Route</span>
+      </button>
+      <button onclick="switchTab('tab-add-order')" class="nav-btn flex-1 py-2 flex flex-col items-center text-gray-500 hover:text-indigo-600">
+        <i data-lucide="shopping-bag" class="w-5 h-5"></i>
+        <span class="text-[10px] mt-1 font-semibold">Take Order</span>
+      </button>
+      <button onclick="switchTab('tab-shops')" class="nav-btn flex-1 py-2 flex flex-col items-center text-gray-500 hover:text-indigo-600">
+        <i data-lucide="store" class="w-5 h-5"></i>
+        <span class="text-[10px] mt-1 font-semibold">Shops</span>
+      </button>
+      <button onclick="switchTab('tab-reports')" class="nav-btn flex-1 py-2 flex flex-col items-center text-gray-500 hover:text-indigo-600">
+        <i data-lucide="bar-chart-3" class="w-5 h-5"></i>
+        <span class="text-[10px] mt-1 font-semibold">Report</span>
+      </button>
+      <button onclick="switchTab('tab-notepad')" class="nav-btn flex-1 py-2 flex flex-col items-center text-gray-500 hover:text-indigo-600">
+        <i data-lucide="file-text" class="w-5 h-5"></i>
+        <span class="text-[10px] mt-1 font-semibold">Notes</span>
+      </button>
+    </div>
+  </nav>
+
+  <!-- ADD NEW SHOP OVERLAY MODAL -->
+  <div id="addShopModal" class="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 hidden">
+    <div class="bg-white rounded-xl shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto p-5 space-y-4">
+      <div class="flex justify-between items-center border-b pb-3">
+        <h3 class="font-bold text-base text-gray-800 flex items-center gap-2">
+          <i data-lucide="store" class="text-indigo-600 w-5 h-5"></i> Add New Shop
+        </h3>
+        <button onclick="closeAddShopModal()" class="text-gray-400 hover:text-gray-600">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <form id="shopForm" onsubmit="saveShop(event)" class="space-y-3">
+        <div>
+          <label class="block text-xs font-bold text-gray-700 mb-1">Shop Name *</label>
+          <input type="text" id="shopName" placeholder="e.g. Al Madina Supermarket" class="w-full border border-gray-300 rounded-lg p-2.5 text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-none" required />
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-bold text-gray-700 mb-1">Location / Area *</label>
+            <input type="text" id="shopLocation" placeholder="e.g. Block 331, Manama" class="w-full border border-gray-300 rounded-lg p-2.5 text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-none" required />
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-gray-700 mb-1">Phone Number *</label>
+            <input type="tel" id="shopNumber" placeholder="e.g. +973 33000000" class="w-full border border-gray-300 rounded-lg p-2.5 text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-none" required />
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold text-gray-700 mb-1">Google Maps Link / Direction URL</label>
+          <input type="url" id="shopMapLink" placeholder="https://maps.google.com/?q=..." class="w-full border border-gray-300 rounded-lg p-2.5 text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-none" />
+          <p class="text-[10px] text-gray-400 mt-0.5">Paste Google Maps link for 1-tap navigation</p>
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold text-gray-700 mb-1">Remarks / Key Info</label>
+          <textarea id="shopRemarks" rows="2" placeholder="e.g. Preferred delivery morning time, owner contact" class="w-full border border-gray-300 rounded-lg p-2.5 text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-none"></textarea>
+        </div>
+
+        <div class="flex gap-2 pt-2">
+          <button type="submit" class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-2.5 rounded-lg text-xs font-semibold shadow active:scale-95 transition-transform">
+            Save Shop
+          </button>
+          <button type="button" onclick="closeAddShopModal()" class="bg-gray-200 text-gray-700 px-4 py-2.5 rounded-lg text-xs font-semibold">
+            Cancel
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ORDER DETAIL & PAYMENT STATUS MODAL -->
+  <div id="orderModal" class="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 hidden">
+    <div class="bg-white rounded-xl shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto p-5 space-y-4">
+      <div class="flex justify-between items-start border-b pb-3">
+        <div>
+          <h3 id="modalShopName" class="font-bold text-base text-gray-800"></h3>
+          <p id="modalShopLoc" class="text-xs text-gray-500"></p>
+        </div>
+        <button onclick="closeModal()" class="text-gray-400 hover:text-gray-600">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <!-- Actions -->
+      <div class="flex gap-2">
+        <a id="modalMapBtn" href="#" target="_blank" class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold py-2 px-3 rounded-lg flex items-center justify-center gap-1.5 shadow">
+          <i data-lucide="navigation" class="w-4 h-4"></i> Map & Directions
+        </a>
+        <a id="modalCallBtn" href="#" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold py-2 px-3 rounded-lg flex items-center justify-center gap-1.5 shadow">
+          <i data-lucide="phone" class="w-4 h-4"></i> Call Shop
+        </a>
+      </div>
+
+      <!-- Order Info -->
+      <div class="bg-gray-50 p-3 rounded-lg space-y-1.5 text-xs">
+        <div class="flex justify-between">
+          <span class="text-gray-500">Delivery Date:</span>
+          <span id="modalDeliveryDate" class="font-semibold text-gray-800"></span>
+        </div>
+        <div class="flex justify-between">
+          <span class="text-gray-500">Order ID:</span>
+          <span id="modalOrderId" class="font-mono text-gray-700"></span>
+        </div>
+      </div>
+
+      <!-- Items List -->
+      <div>
+        <h4 class="text-xs font-bold text-gray-700 mb-2">Ordered Items</h4>
+        <div id="modalItemsList" class="space-y-1 text-xs">
+          <!-- Rendered items -->
+        </div>
+        <div class="flex justify-between items-center mt-3 pt-2 border-t font-bold text-xs text-gray-800">
+          <span>Total Order Value:</span>
+          <span id="modalGrandTotal">0.000 BHD</span>
+        </div>
+      </div>
+
+      <!-- Payment Status Update Box -->
+      <div class="bg-indigo-50 border border-indigo-100 p-3 rounded-xl space-y-3">
+        <h4 class="text-xs font-bold text-indigo-900">Update Payment Status</h4>
+        
+        <div>
+          <label class="block text-[11px] font-semibold text-gray-700 mb-1">Status</label>
+          <select id="modalPaymentStatus" onchange="togglePaymentMethodField()" class="w-full border border-gray-300 rounded-lg p-2 text-xs focus:ring-2 focus:ring-indigo-500">
+            <option value="unpaid">Unpaid</option>
+            <option value="paid">Paid (Full)</option>
+            <option value="partial">Partial Payment</option>
+          </select>
+        </div>
+
+        <div id="partialAmountContainer" class="hidden">
+          <label class="block text-[11px] font-semibold text-gray-700 mb-1">Amount Paid So Far (BHD)</label>
+          <input type="number" step="0.001" id="modalPartialAmount" class="w-full border border-gray-300 rounded-lg p-2 text-xs focus:ring-2 focus:ring-indigo-500" placeholder="0.000" />
+        </div>
+
+        <div id="paymentMethodContainer" class="hidden">
+          <label class="block text-[11px] font-semibold text-gray-700 mb-1">Payment Method</label>
+          <div class="grid grid-cols-2 gap-2">
+            <label class="flex items-center gap-2 border bg-white p-2 rounded-lg cursor-pointer text-xs">
+              <input type="radio" name="paymentMethod" value="cash" checked class="text-indigo-600"> Cash
+            </label>
+            <label class="flex items-center gap-2 border bg-white p-2 rounded-lg cursor-pointer text-xs">
+              <input type="radio" name="paymentMethod" value="benefit" class="text-indigo-600"> Benefit Pay
+            </label>
+          </div>
+        </div>
+
+        <button onclick="savePaymentStatus()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold py-2 rounded-lg shadow active:scale-95 transition-transform">
+          Update Payment
+        </button>
+      </div>
+
+      <div class="flex justify-between items-center pt-2">
+        <button onclick="confirmDeleteOrder()" class="text-red-500 hover:text-red-700 text-xs font-semibold flex items-center gap-1">
+          <i data-lucide="trash-2" class="w-3.5 h-3.5"></i> Delete Order
+        </button>
+        <button onclick="closeModal()" class="bg-gray-200 text-gray-700 px-4 py-1.5 rounded-lg text-xs font-semibold">
+          Close
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- CUSTOM CONFIRMATION MODAL -->
+  <div id="confirmModal" class="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4 hidden">
+    <div class="bg-white rounded-xl shadow-2xl max-w-sm w-full p-5 space-y-4 text-center">
+      <div class="w-12 h-12 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto">
+        <i data-lucide="alert-triangle" class="w-6 h-6"></i>
+      </div>
+      <div>
+        <h3 id="confirmTitle" class="font-bold text-gray-800 text-base">Are you sure?</h3>
+        <p id="confirmDesc" class="text-xs text-gray-500 mt-1">This action cannot be undone.</p>
+      </div>
+      <div class="flex gap-2">
+        <button id="confirmYesBtn" class="flex-1 bg-red-600 hover:bg-red-700 text-white text-xs font-semibold py-2.5 rounded-lg shadow">
+          Yes, Delete
+        </button>
+        <button onclick="closeConfirmModal()" class="flex-1 bg-gray-200 text-gray-700 text-xs font-semibold py-2.5 rounded-lg">
+          Cancel
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Application Logic -->
+  <script>
+    // App State Management
+    let shops = JSON.parse(localStorage.getItem('sdvansale_shops') || '[]');
+    let orders = JSON.parse(localStorage.getItem('sdvansale_orders') || '[]');
+    let notes = localStorage.getItem('sdvansale_notes') || '';
+    let currentActiveOrder = null;
+    let activeFilter = 'all';
+    let onConfirmAction = null;
+
+    // Toast Utility
+    function showToast(msg) {
+      const toast = document.getElementById('toast');
+      document.getElementById('toastMsg').innerText = msg;
+      toast.classList.remove('opacity-0', 'pointer-events-none');
+      setTimeout(() => {
+        toast.classList.add('opacity-0', 'pointer-events-none');
+      }, 2500);
+    }
+
+    // Custom Modal Confirmation Popup
+    function openConfirmModal(title, desc, onConfirm) {
+      document.getElementById('confirmTitle').innerText = title;
+      document.getElementById('confirmDesc').innerText = desc;
+      onConfirmAction = onConfirm;
+      document.getElementById('confirmModal').classList.remove('hidden');
+    }
+
+    function closeConfirmModal() {
+      document.getElementById('confirmModal').classList.add('hidden');
+      onConfirmAction = null;
+    }
+
+    document.getElementById('confirmYesBtn').onclick = () => {
+      if (typeof onConfirmAction === 'function') {
+        onConfirmAction();
+      }
+      closeConfirmModal();
+    };
+
+    // Currency Formatter
+    function formatBHD(amount) {
+      return (parseFloat(amount) || 0).toFixed(3) + ' BHD';
+    }
+
+    // App Initialization
+    document.addEventListener('DOMContentLoaded', () => {
+      const options = { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' };
+      document.getElementById('headerDate').innerText = new Date().toLocaleDateString('en-US', options);
+      document.getElementById('reportDate').value = new Date().toISOString().split('T')[0];
+      
+      document.getElementById('driverNotes').value = notes;
+
+      renderShops();
+      populateShopSelect();
+      renderOrders();
+      addOrderItemRow();
+      
+      // Drag and Drop Route
+      const el = document.getElementById('ordersList');
+      Sortable.create(el, {
+        animation: 150,
+        handle: '.drag-handle',
+        ghostClass: 'ghost-class',
+        onEnd: function () {
+          saveOrderRoutePriority();
+        }
+      });
+
+      lucide.createIcons();
+    });
+
+    // Navigation Switcher
+    function switchTab(tabId) {
+      document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+      document.getElementById(tabId).classList.add('active');
+
+      const tabNames = ['tab-orders', 'tab-add-order', 'tab-shops', 'tab-reports', 'tab-notepad'];
+      const index = tabNames.indexOf(tabId);
+      
+      document.querySelectorAll('.nav-btn').forEach((btn, i) => {
+        if(i === index) {
+          btn.classList.add('text-indigo-600');
+          btn.classList.remove('text-gray-500');
+        } else {
+          btn.classList.remove('text-indigo-600');
+          btn.classList.add('text-gray-500');
+        }
+      });
+
+      if(tabId === 'tab-reports') {
+        renderReport();
+      }
+    }
+
+    // --- SHOPS MODAL & MANAGEMENT ---
+    function openAddShopModal() {
+      document.getElementById('addShopModal').classList.remove('hidden');
+    }
+
+    function closeAddShopModal() {
+      document.getElementById('addShopModal').classList.add('hidden');
+      document.getElementById('shopForm').reset();
+    }
+
+    function saveShop(e) {
+      e.preventDefault();
+      const shop = {
+        id: 'shop_' + Date.now(),
+        name: document.getElementById('shopName').value.trim(),
+        location: document.getElementById('shopLocation').value.trim(),
+        number: document.getElementById('shopNumber').value.trim(),
+        mapLink: document.getElementById('shopMapLink').value.trim(),
+        remarks: document.getElementById('shopRemarks').value.trim()
+      };
+
+      shops.push(shop);
+      localStorage.setItem('sdvansale_shops', JSON.stringify(shops));
+      
+      closeAddShopModal();
+      renderShops();
+      populateShopSelect();
+      showToast('Shop added successfully!');
+    }
+
+    function renderShops() {
+      const container = document.getElementById('shopsList');
+      document.getElementById('shopCount').innerText = shops.length;
+
+      if (shops.length === 0) {
+        container.innerHTML = `<p class="text-xs text-gray-400 py-8 text-center">No shops added yet. Tap "+ Add New Shop" to add your first customer!</p>`;
+        return;
+      }
+
+      container.innerHTML = shops.map(s => `
+        <div class="py-3 flex justify-between items-start">
+          <div class="space-y-1">
+            <h4 class="font-bold text-sm text-gray-800">${escapeHtml(s.name)}</h4>
+            <p class="text-xs text-gray-500 flex items-center gap-1">
+              <i data-lucide="map-pin" class="w-3 h-3 text-red-500"></i> ${escapeHtml(s.location)}
+            </p>
+            <p class="text-xs text-gray-500 flex items-center gap-1">
+              <i data-lucide="phone" class="w-3 h-3 text-indigo-500"></i> ${escapeHtml(s.number)}
+            </p>
+            ${s.remarks ? `<p class="text-[11px] text-amber-700 bg-amber-50 px-2 py-0.5 rounded inline-block">Note: ${escapeHtml(s.remarks)}</p>` : ''}
+          </div>
+          <div class="flex items-center gap-2">
+            ${s.mapLink ? `<a href="${escapeHtml(s.mapLink)}" target="_blank" class="p-2 text-emerald-600 hover:bg-emerald-50 rounded-lg" title="Open Map"><i data-lucide="navigation" class="w-4 h-4"></i></a>` : ''}
+            <button onclick="requestDeleteShop('${s.id}')" class="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg" title="Delete Shop">
+              <i data-lucide="trash-2" class="w-4 h-4"></i>
+            </button>
+          </div>
+        </div>
+      `).join('');
+
+      lucide.createIcons();
+    }
+
+    function requestDeleteShop(id) {
+      const shop = shops.find(s => s.id === id);
+      const name = shop ? shop.name : 'this shop';
+      openConfirmModal(`Delete "${name}"?`, 'All registered details for this shop will be permanently removed.', () => {
+        executeDeleteShop(id);
+      });
+    }
+
+    function executeDeleteShop(id) {
+      shops = shops.filter(s => s.id !== id);
+      localStorage.setItem('sdvansale_shops', JSON.stringify(shops));
+      renderShops();
+      populateShopSelect();
+      showToast('Shop deleted!');
+    }
+
+    function populateShopSelect() {
+      const select = document.getElementById('orderShopSelect');
+      select.innerHTML = '<option value="">-- Choose a Shop --</option>' + 
+        shops.map(s => `<option value="${s.id}">${escapeHtml(s.name)} (${escapeHtml(s.location)})</option>`).join('');
+    }
+
+    // --- ORDERS MANAGEMENT ---
+    function addOrderItemRow() {
+      const container = document.getElementById('orderItemsContainer');
+      const rowId = 'item_' + Date.now() + Math.random().toString(36).substring(2, 5);
+      
+      const div = document.createElement('div');
+      div.className = 'flex items-center gap-2 item-row';
+      div.id = rowId;
+      div.innerHTML = `
+        <input type="text" placeholder="Item Name" class="item-name flex-1 border border-gray-300 rounded-lg p-2 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500" required />
+        <input type="number" placeholder="Qty" value="1" min="1" oninput="calculateOrderTotal()" class="item-qty w-14 border border-gray-300 rounded-lg p-2 text-xs text-center focus:outline-none focus:ring-1 focus:ring-indigo-500" required />
+        <input type="number" step="0.001" placeholder="Price" oninput="calculateOrderTotal()" class="item-price w-20 border border-gray-300 rounded-lg p-2 text-xs text-center focus:outline-none focus:ring-1 focus:ring-indigo-500" required />
+        <button type="button" onclick="removeOrderItemRow('${rowId}')" class="text-red-400 hover:text-red-600 p-1"><i data-lucide="x-circle" class="w-4 h-4"></i></button>
+      `;
+      container.appendChild(div);
+      lucide.createIcons();
+    }
+
+    function removeOrderItemRow(rowId) {
+      const container = document.getElementById('orderItemsContainer');
+      if (container.children.length > 1) {
+        document.getElementById(rowId).remove();
+        calculateOrderTotal();
+      }
+    }
+
+    function calculateOrderTotal() {
+      let total = 0;
+      document.querySelectorAll('.item-row').forEach(row => {
+        const qty = parseFloat(row.querySelector('.item-qty').value) || 0;
+        const price = parseFloat(row.querySelector('.item-price').value) || 0;
+        total += qty * price;
+      });
+      document.getElementById('orderGrandTotal').innerText = total.toFixed(3);
+      return total;
+    }
+
+    function saveOrder(e) {
+      e.preventDefault();
+      const shopId = document.getElementById('orderShopSelect').value;
+      const shop = shops.find(s => s.id === shopId);
+
+      if (!shop) {
+        showToast('Please select a valid shop.');
+        return;
+      }
+
+      const itemRows = document.querySelectorAll('.item-row');
+      const items = [];
+      itemRows.forEach(row => {
+        items.push({
+          name: row.querySelector('.item-name').value.trim(),
+          qty: parseFloat(row.querySelector('.item-qty').value) || 1,
+          price: parseFloat(row.querySelector('.item-price').value) || 0
+        });
+      });
+
+      const order = {
+        id: 'ORD-' + Math.floor(100000 + Math.random() * 900000),
+        shopId: shop.id,
+        shopName: shop.name,
+        shopLocation: shop.location,
+        shopNumber: shop.number,
+        mapLink: shop.mapLink,
+        deliveryDate: document.getElementById('orderDeliveryDate').value,
+        items: items,
+        totalAmount: calculateOrderTotal(),
+        paymentStatus: 'unpaid',
+        paymentMethod: null,
+        paidAmount: 0,
+        createdAt: new Date().toISOString()
+      };
+
+      orders.unshift(order);
+      localStorage.setItem('sdvansale_orders', JSON.stringify(orders));
+
+      document.getElementById('orderForm').reset();
+      document.getElementById('orderItemsContainer').innerHTML = '';
+      addOrderItemRow();
+      calculateOrderTotal();
+
+      renderOrders();
+      switchTab('tab-orders');
+      showToast('Order created successfully!');
+    }
+
+    function filterOrders(status) {
+      activeFilter = status;
+      document.querySelectorAll('.filter-btn').forEach(btn => {
+        btn.classList.remove('active', 'bg-indigo-100', 'text-indigo-700');
+        btn.classList.add('bg-gray-200', 'text-gray-700');
+      });
+      event.target.classList.add('active', 'bg-indigo-100', 'text-indigo-700');
+      renderOrders();
+    }
+
+    function renderOrders() {
+      const container = document.getElementById('ordersList');
+      
+      let filtered = orders;
+      if (activeFilter === 'pending') {
+        filtered = orders.filter(o => o.paymentStatus === 'unpaid' || o.paymentStatus === 'partial');
+      } else if (activeFilter !== 'all') {
+        filtered = orders.filter(o => o.paymentStatus === activeFilter);
+      }
+
+      if (filtered.length === 0) {
+        container.innerHTML = `<div class="bg-white p-8 rounded-xl text-center text-gray-400 text-xs">No orders found for this view.</div>`;
+        return;
+      }
+
+      container.innerHTML = filtered.map((ord, idx) => `
+        <div data-id="${ord.id}" class="bg-white p-3.5 rounded-xl shadow-sm border border-gray-100 flex items-center justify-between gap-3 hover:border-indigo-200 transition cursor-pointer">
+          <div class="drag-handle cursor-grab active:cursor-grabbing text-gray-300 hover:text-gray-600 p-1">
+            <i data-lucide="grip-vertical" class="w-5 h-5"></i>
+          </div>
+
+          <div class="flex-1" onclick="openOrderModal('${ord.id}')">
+            <div class="flex justify-between items-start mb-1">
+              <div>
+                <span class="text-[10px] font-bold text-indigo-600 uppercase bg-indigo-50 px-2 py-0.5 rounded">#Route ${idx + 1}</span>
+                <h3 class="font-bold text-sm text-gray-800 mt-0.5">${escapeHtml(ord.shopName)}</h3>
+              </div>
+              <span class="text-xs font-bold text-gray-900">${formatBHD(ord.totalAmount)}</span>
+            </div>
+
+            <div class="flex flex-wrap items-center gap-2 text-xs text-gray-500">
+              <span class="flex items-center gap-1"><i data-lucide="map-pin" class="w-3 h-3 text-red-500"></i> ${escapeHtml(ord.shopLocation)}</span>
+              <span class="flex items-center gap-1"><i data-lucide="calendar" class="w-3 h-3"></i> ${ord.deliveryDate}</span>
+            </div>
+
+            <div class="mt-2 flex items-center justify-between">
+              <div class="text-[11px]">
+                ${getPaymentBadge(ord)}
+              </div>
+              <span class="text-[11px] text-indigo-600 font-semibold flex items-center gap-1">
+                View <i data-lucide="chevron-right" class="w-3 h-3"></i>
+              </span>
+            </div>
+          </div>
+        </div>
+      `).join('');
+
+      lucide.createIcons();
+    }
+
+    function getPaymentBadge(ord) {
+      if (ord.paymentStatus === 'paid') {
+        return `<span class="bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded font-bold uppercase text-[10px]">Paid (${ord.paymentMethod})</span>`;
+      } else if (ord.paymentStatus === 'partial') {
+        return `<span class="bg-amber-100 text-amber-800 px-2 py-0.5 rounded font-bold uppercase text-[10px]">Partial (${formatBHD(ord.paidAmount)} - ${ord.paymentMethod})</span>`;
+      } else {
+        return `<span class="bg-red-100 text-red-800 px-2 py-0.5 rounded font-bold uppercase text-[10px]">Unpaid</span>`;
+      }
+    }
+
+    function saveOrderRoutePriority() {
+      const orderNodes = document.querySelectorAll('#ordersList > div');
+      const newOrderList = [];
+
+      orderNodes.forEach(node => {
+        const id = node.getAttribute('data-id');
+        const found = orders.find(o => o.id === id);
+        if (found) newOrderList.push(found);
+      });
+
+      orders.forEach(o => {
+        if (!newOrderList.some(item => item.id === o.id)) {
+          newOrderList.push(o);
+        }
+      });
+
+      orders = newOrderList;
+      localStorage.setItem('sdvansale_orders', JSON.stringify(orders));
+      renderOrders();
+    }
+
+    // --- MODAL & ORDER DETAILS ---
+    function openOrderModal(orderId) {
+      currentActiveOrder = orders.find(o => o.id === orderId);
+      if (!currentActiveOrder) return;
+
+      document.getElementById('modalShopName').innerText = currentActiveOrder.shopName;
+      document.getElementById('modalShopLoc').innerText = currentActiveOrder.shopLocation;
+      document.getElementById('modalDeliveryDate').innerText = currentActiveOrder.deliveryDate;
+      document.getElementById('modalOrderId').innerText = currentActiveOrder.id;
+      document.getElementById('modalGrandTotal').innerText = formatBHD(currentActiveOrder.totalAmount);
+
+      const mapBtn = document.getElementById('modalMapBtn');
+      if (currentActiveOrder.mapLink) {
+        mapBtn.href = currentActiveOrder.mapLink;
+      } else {
+        mapBtn.href = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(currentActiveOrder.shopName + ' ' + currentActiveOrder.shopLocation)}`;
+      }
+
+      document.getElementById('modalCallBtn').href = `tel:${currentActiveOrder.shopNumber}`;
+
+      const itemsContainer = document.getElementById('modalItemsList');
+      itemsContainer.innerHTML = currentActiveOrder.items.map(i => `
+        <div class="flex justify-between items-center py-1 border-b border-gray-100">
+          <span>${escapeHtml(i.name)} <span class="text-gray-400">x${i.qty}</span></span>
+          <span class="font-semibold">${formatBHD(i.qty * i.price)}</span>
+        </div>
+      `).join('');
+
+      document.getElementById('modalPaymentStatus').value = currentActiveOrder.paymentStatus || 'unpaid';
+      document.getElementById('modalPartialAmount').value = currentActiveOrder.paidAmount || '';
+      
+      if (currentActiveOrder.paymentMethod) {
+        const radios = document.getElementsByName('paymentMethod');
+        radios.forEach(r => { if (r.value === currentActiveOrder.paymentMethod) r.checked = true; });
+      }
+
+      togglePaymentMethodField();
+      document.getElementById('orderModal').classList.remove('hidden');
+      lucide.createIcons();
+    }
+
+    function togglePaymentMethodField() {
+      const status = document.getElementById('modalPaymentStatus').value;
+      const methodContainer = document.getElementById('paymentMethodContainer');
+      const partialContainer = document.getElementById('partialAmountContainer');
+
+      if (status === 'paid') {
+        methodContainer.classList.remove('hidden');
+        partialContainer.classList.add('hidden');
+      } else if (status === 'partial') {
+        methodContainer.classList.remove('hidden');
+        partialContainer.classList.remove('hidden');
+      } else {
+        methodContainer.classList.add('hidden');
+        partialContainer.classList.add('hidden');
+      }
+    }
+
+    function savePaymentStatus() {
+      if (!currentActiveOrder) return;
+
+      const status = document.getElementById('modalPaymentStatus').value;
+      let method = null;
+      let paidAmt = 0;
+
+      if (status !== 'unpaid') {
+        const radios = document.getElementsByName('paymentMethod');
+        for (const r of radios) {
+          if (r.checked) { method = r.value; break; }
+        }
+      }
+
+      if (status === 'paid') {
+        paidAmt = currentActiveOrder.totalAmount;
+      } else if (status === 'partial') {
+        paidAmt = parseFloat(document.getElementById('modalPartialAmount').value) || 0;
+      }
+
+      currentActiveOrder.paymentStatus = status;
+      currentActiveOrder.paymentMethod = method;
+      currentActiveOrder.paidAmount = paidAmt;
+
+      localStorage.setItem('sdvansale_orders', JSON.stringify(orders));
+      renderOrders();
+      closeModal();
+      showToast('Payment updated!');
+    }
+
+    function confirmDeleteOrder() {
+      if (!currentActiveOrder) return;
+      const orderId = currentActiveOrder.id;
+      const shopName = currentActiveOrder.shopName;
+
+      openConfirmModal(`Delete order ${orderId}?`, `Are you sure you want to delete this order for ${shopName}?`, () => {
+        executeDeleteOrder(orderId);
+      });
+    }
+
+    function executeDeleteOrder(orderId) {
+      orders = orders.filter(o => o.id !== orderId);
+      localStorage.setItem('sdvansale_orders', JSON.stringify(orders));
+      renderOrders();
+      closeModal();
+      showToast('Order deleted!');
+    }
+
+    function closeModal() {
+      document.getElementById('orderModal').classList.add('hidden');
+      currentActiveOrder = null;
+    }
+
+    // --- DAILY REPORT ---
+    function renderReport() {
+      const selectedDate = document.getElementById('reportDate').value;
+      document.getElementById('pdfSelectedDate').innerText = selectedDate;
+
+      const filtered = orders.filter(o => o.deliveryDate === selectedDate);
+
+      let totalSales = 0;
+      let totalCash = 0;
+      let totalBenefit = 0;
+      let totalUnpaid = 0;
+
+      filtered.forEach(o => {
+        totalSales += o.totalAmount;
+
+        if (o.paymentStatus === 'paid') {
+          if (o.paymentMethod === 'cash') totalCash += o.totalAmount;
+          if (o.paymentMethod === 'benefit') totalBenefit += o.totalAmount;
+        } else if (o.paymentStatus === 'partial') {
+          if (o.paymentMethod === 'cash') totalCash += o.paidAmount;
+          if (o.paymentMethod === 'benefit') totalBenefit += o.paidAmount;
+          totalUnpaid += (o.totalAmount - o.paidAmount);
+        } else {
+          totalUnpaid += o.totalAmount;
+        }
+      });
+
+      document.getElementById('reportTotalOrders').innerText = filtered.length;
+      document.getElementById('reportTotalSales').innerText = formatBHD(totalSales);
+      document.getElementById('reportCash').innerText = formatBHD(totalCash);
+      document.getElementById('reportBenefit').innerText = formatBHD(totalBenefit);
+      document.getElementById('reportUnpaid').innerText = formatBHD(totalUnpaid);
+
+      const listContainer = document.getElementById('reportOrdersList');
+      if (filtered.length === 0) {
+        listContainer.innerHTML = `<p class="text-xs text-gray-400 py-3 text-center">No orders registered for this date.</p>`;
+        return;
+      }
+
+      listContainer.innerHTML = filtered.map(o => `
+        <div class="flex justify-between items-center p-2.5 bg-gray-50 rounded-lg text-xs border border-gray-100">
+          <div>
+            <span class="font-bold text-gray-800">${escapeHtml(o.shopName)}</span>
+            <div class="mt-0.5">${getPaymentBadge(o)}</div>
+          </div>
+          <div class="text-right">
+            <span class="font-bold text-gray-800 block">${formatBHD(o.totalAmount)}</span>
+            <span class="text-[10px] text-gray-400">${o.id}</span>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    // PDF Generator
+    function downloadReportPDF() {
+      const selectedDate = document.getElementById('reportDate').value;
+      const element = document.getElementById('pdfReportContent');
+
+      const opt = {
+        margin:       0.5,
+        filename:     `SD_VANSALE_Report_${selectedDate}.pdf`,
+        image:        { type: 'jpeg', quality: 0.98 },
+        html2canvas:  { scale: 2 },
+        jsPDF:        { unit: 'in', format: 'a4', orientation: 'portrait' }
+      };
+
+      html2pdf().set(opt).from(element).save();
+      showToast('Downloading PDF Report...');
+    }
+
+    // --- NOTEPAD ---
+    let saveTimeout = null;
+    function saveNotes() {
+      const text = document.getElementById('driverNotes').value;
+      localStorage.setItem('sdvansale_notes', text);
+
+      const status = document.getElementById('notepadStatus');
+      status.classList.remove('hidden');
+
+      clearTimeout(saveTimeout);
+      saveTimeout = setTimeout(() => {
+        status.classList.add('hidden');
+      }, 1500);
+    }
+
+    // Utility
+    function escapeHtml(str) {
+      if(!str) return '';
+      return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+    }
+  </script>
+</body>
+</html>
+
